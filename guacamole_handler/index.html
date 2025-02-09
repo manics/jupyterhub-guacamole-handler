@@ -4,6 +4,8 @@
 
 <h1>JupyterHub Guacamole Token Handler</h1>
 
-<p><a href="{{guacamole_url}}">Connect to Guacamole ({{guacamole_url}})</a></p>
+{% for key, value in guacamole_urls.items() %}
+<p><a href="{{value}}">Connect to Guacamole {{key}} ({{value}})</a></p>
+{% end %}
 
 {% end %}

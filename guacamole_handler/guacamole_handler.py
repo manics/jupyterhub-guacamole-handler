@@ -58,18 +58,37 @@ def encrypt(key, message):
     return ct
 
 
-async def guacamole_url(username):
+async def guacamole_url(username, protocol):
     expiry_ms = int(time() * 1000) + 60000
     data = {
         "username": username,
         "expires": expiry_ms,
-        "connections": {
-            f"jupyter-{username}": {
+        "connections": {},
+    }
+
+    if protocol == "vnc":
+        data["connections"] = {
+            f"jupyter-{username}-vnc": {
                 "protocol": "vnc",
                 "parameters": {"hostname": f"jupyter-{username}", "port": "5901"},
-            },
-        },
-    }
+            }
+        }
+    elif protocol == "rdp":
+        data["connections"] = {
+            f"jupyter-{username}-rdp": {
+                "protocol": "rdp",
+                "parameters": {
+                    "hostname": f"jupyter-{username}",
+                    "port": "3389",
+                    "username": "ubuntu",
+                    "password": "IGNORED",
+                    "ignore-cert": "true",
+                },
+            }
+        }
+    else:
+        raise ValueError(f"Invalid protocol: {protocol}")
+
     message = json.dumps(data).encode()
 
     signature = sign(JSON_SECRET_KEY, message)
@@ -122,14 +141,17 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
                 log.error(f"user: {user_model}")
                 raise HTTPError(409, reason="User's server is not running")
 
-        d = await guacamole_url(user_model["name"])
-        log.info(f"Created Guacamole URL for {user_model['name']} default server")
-        url = f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={d['authToken']}"
-
+        vnc = await guacamole_url(user_model["name"], "vnc")
+        rdp = await guacamole_url(user_model["name"], "rdp")
+        log.info(f"Created Guacamole URLs for {user_model['name']} default server")
+        urls = {
+            "vnc": f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={vnc['authToken']}",
+            "rdp": f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={rdp['authToken']}",
+        }
         # self.set_header("content-type", "application/json")
         # self.write(json.dumps(d, indent=2, sort_keys=True))
         # self.redirect(url)
-        self.render("index.html", guacamole_url=url)
+        self.render("index.html", guacamole_urls=urls)
 
     def write_error(self, status_code, **kwargs):
         exc_info = kwargs.get("exc_info")
