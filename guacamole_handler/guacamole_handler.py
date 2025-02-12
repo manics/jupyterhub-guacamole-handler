@@ -141,13 +141,20 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
                 log.error(f"user: {user_model}")
                 raise HTTPError(409, reason="User's server is not running")
 
-        vnc = await guacamole_url(user_model["name"], "vnc")
-        rdp = await guacamole_url(user_model["name"], "rdp")
-        log.info(f"Created Guacamole URLs for {user_model['name']} default server")
-        urls = {
-            "vnc": f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={vnc['authToken']}",
-            "rdp": f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={rdp['authToken']}",
-        }
+        default_server = user_model["servers"][""]
+        urls = {}
+        connection = default_server["state"].get("connection")
+        if not connection or connection == "rdp":
+            rdp = await guacamole_url(user_model["name"], "rdp")
+            urls["rdp"] = (
+                f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={rdp['authToken']}"
+            )
+        if not connection or connection == "vnc":
+            vnc = await guacamole_url(user_model["name"], "vnc")
+            urls["vnc"] = (
+                f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={vnc['authToken']}"
+            )
+        log.info(f"Created Guacamole URL(s) for {user_model['name']} default server")
         # self.set_header("content-type", "application/json")
         # self.write(json.dumps(d, indent=2, sort_keys=True))
         # self.redirect(url)
