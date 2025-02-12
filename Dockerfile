@@ -8,4 +8,6 @@ RUN pip install --no-cache-dir \
     -r /src/requirements.txt
 
 USER jovyan
+
+EXPOSE 8040
 CMD ["python", "/opt/guacamole_handler/guacamole_handler.py"]
