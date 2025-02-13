@@ -4,6 +4,7 @@ Fetch a token from Guacamole
 https://github.com/jupyterhub/jupyterhub/blob/5.0.0/examples/service-whoami/whoami-oauth.py
 """
 
+from argparse import ArgumentParser
 import json
 import os
 from urllib.parse import urlparse
@@ -120,41 +121,42 @@ async def guacamole_url(username, protocol):
 class GuacamoleHandler(HubOAuthenticated, RequestHandler):
     @authenticated
     async def get(self):
-        user_model = self.get_current_user()
-        log.debug(f"user_model: {user_model}")
+        current_user_model = self.get_current_user()
+        log.debug(f"{current_user_model=}")
 
-        # Note if server field is missing (not just empty) this means the oauth
+        # Always refresh to ensure server state information is up to date
+        # Note if fields are missing (not just empty) this means the oauth
         # scopes are missing
-        if not user_model["server"]:
-            # This may be out of date, make an API call to refresh server info
-            token = self.hub_auth.get_token(self)
-            http_client = AsyncHTTPClient()
-            response = await http_client.fetch(
-                f"{self.hub_auth.api_url}/user",
-                headers={"Authorization": f"token {token}"},
-            )
-            if response.error:
-                raise HTTPError(500, reason="Failed to get user info")
+        token = self.hub_auth.get_token(self)
+        http_client = AsyncHTTPClient()
+        response = await http_client.fetch(
+            f"{self.hub_auth.api_url}/user",
+            headers={"Authorization": f"token {token}"},
+        )
+        if response.error:
+            raise HTTPError(500, reason="Failed to get user info")
 
-            user = json.loads(response.body)
-            if not user["server"]:
-                log.error(f"user: {user_model}")
-                raise HTTPError(409, reason="User's server is not running")
+        user = json.loads(response.body)
+        log.debug(f"{user=}")
 
-        default_server = user_model["servers"][""]
+        if not user["server"]:
+            log.error(f"user: {user}")
+            raise HTTPError(409, reason="User's server is not running")
+
+        default_server = user["servers"][""]
         urls = {}
         connection = default_server["state"].get("connection")
         if not connection or connection == "rdp":
-            rdp = await guacamole_url(user_model["name"], "rdp")
+            rdp = await guacamole_url(user["name"], "rdp")
             urls["rdp"] = (
                 f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={rdp['authToken']}"
             )
         if not connection or connection == "vnc":
-            vnc = await guacamole_url(user_model["name"], "vnc")
+            vnc = await guacamole_url(user["name"], "vnc")
             urls["vnc"] = (
                 f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={vnc['authToken']}"
             )
-        log.info(f"Created Guacamole URL(s) for {user_model['name']} default server")
+        log.info(f"Created Guacamole URL(s) for {user['name']} default server")
         # self.set_header("content-type", "application/json")
         # self.write(json.dumps(d, indent=2, sort_keys=True))
         # self.redirect(url)
@@ -216,7 +218,10 @@ def main():
 
 
 if __name__ == "__main__":
-    log.setLevel("INFO")
+    parser = ArgumentParser("JupyerHub Guacamole handler")
+    parser.add_argument("--log-level", default="INFO", help="Log level")
+    args = parser.parse_args()
+    log.setLevel(args.log_level.upper())
     h = logging.StreamHandler()
     h.setFormatter(
         logging.Formatter(
