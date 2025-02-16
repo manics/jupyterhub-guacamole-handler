@@ -119,6 +119,9 @@ async def guacamole_url(username, protocol):
 
 
 class GuacamoleHandler(HubOAuthenticated, RequestHandler):
+    def get_template_path(self):
+        return os.path.join(os.path.dirname(__file__), "templates")
+
     @authenticated
     async def get(self):
         current_user_model = self.get_current_user()
