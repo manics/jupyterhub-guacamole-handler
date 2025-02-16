@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Fetch a token from Guacamole
 
@@ -33,8 +34,12 @@ from http.client import responses
 log = logging.getLogger("jupyterhub_guacamole")
 
 GUACAMOLE_HOST = os.environ["GUACAMOLE_HOST"]
-GUACAMOLE_PUBLIC_HOST = os.environ["GUACAMOLE_PUBLIC_HOST"]
+GUACAMOLE_PUBLIC_HOST = os.getenv("GUACAMOLE_PUBLIC_HOST", GUACAMOLE_HOST)
+# Must be 128 bits (32 hex digits)
 JSON_SECRET_KEY = os.environ["JSON_SECRET_KEY"]
+
+JUPYTERHUB_API_TOKEN = os.environ["JUPYTERHUB_API_TOKEN"]
+JUPYTERHUB_SERVICE_PREFIX = os.environ["JUPYTERHUB_SERVICE_PREFIX"]
 
 
 def sign(key, message):
@@ -123,18 +128,20 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
         return os.path.join(os.path.dirname(__file__), "templates")
 
     @authenticated
-    async def get(self):
+    async def get(self, servername):
         current_user_model = self.get_current_user()
         log.debug(f"{current_user_model=}")
+        if not current_user_model:
+            raise HTTPError(403, reason="Missing user")
 
-        # Always refresh to ensure server state information is up to date
-        # Note if fields are missing (not just empty) this means the oauth
-        # scopes are missing
-        token = self.hub_auth.get_token(self)
+        # Server state information requires admin scopes, so make the request
+        # using the service's own token
+        # token = self.hub_auth.get_token(self)
+        token = JUPYTERHUB_API_TOKEN
         http_client = AsyncHTTPClient()
         response = await http_client.fetch(
-            f"{self.hub_auth.api_url}/user",
-            headers={"Authorization": f"token {token}"},
+            f"{self.hub_auth.api_url}/users/{current_user_model['name']}",
+            headers={"Authorization": f"Bearer {token}"},
         )
         if response.error:
             raise HTTPError(500, reason="Failed to get user info")
@@ -142,13 +149,13 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
         user = json.loads(response.body)
         log.debug(f"{user=}")
 
-        if not user["server"]:
-            log.error(f"user: {user}")
+        server = user["servers"].get(servername)
+        if not server:
+            log.error(f"user server '{servername}' isn't running: {user}")
             raise HTTPError(409, reason="User's server is not running")
 
-        default_server = user["servers"][""]
         urls = {}
-        connection = default_server["state"].get("connection")
+        connection = server["state"].get("connection")
         if not connection or connection == "rdp":
             rdp = await guacamole_url(user["name"], "rdp")
             urls["rdp"] = (
@@ -189,17 +196,16 @@ class HealthHandler(RequestHandler):
 
 
 def main():
+    def rule(p, *args):
+        return (url_path_join(JUPYTERHUB_SERVICE_PREFIX, p), *args)
+
     app = Application(
         [
-            (os.environ["JUPYTERHUB_SERVICE_PREFIX"], GuacamoleHandler),
-            (
-                url_path_join(
-                    os.environ["JUPYTERHUB_SERVICE_PREFIX"], "oauth_callback"
-                ),
-                HubOAuthCallbackHandler,
-            ),
-            ("/health/?", HealthHandler),
-            (r".*", GuacamoleHandler),
+            rule("", GuacamoleHandler),
+            rule("oauth_callback", HubOAuthCallbackHandler),
+            rule("health/?", HealthHandler),
+            # TODO: Enforce naming restrictions on user and server names in JupyterHub
+            rule(r"(?P<servername>[^/]*)", GuacamoleHandler),
         ],
         cookie_secret=os.urandom(32),
     )
@@ -221,7 +227,7 @@ def main():
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser("JupyerHub Guacamole handler")
+    parser = ArgumentParser("JupyterHub Guacamole handler")
     parser.add_argument("--log-level", default="INFO", help="Log level")
     args = parser.parse_args()
     log.setLevel(args.log_level.upper())

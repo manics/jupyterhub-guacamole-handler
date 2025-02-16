@@ -8,3 +8,9 @@ repos:
         args: ["--fix", "--show-fixes"]
       # Formatter.
       - id: ruff-format
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.4.2
+    hooks:
+      - id: prettier
+        exclude: guacamole_handler/templates/
