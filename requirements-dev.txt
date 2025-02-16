@@ -1,5 +1,3 @@
 -r requirements.txt
 pytest
 pytest-jupyterhub
-# Use the unofficial Python implementation so we don't need to bother with NodeJS in GitHub CI
-configurable-http-proxy
