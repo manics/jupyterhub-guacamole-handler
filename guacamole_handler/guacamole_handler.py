@@ -203,7 +203,7 @@ def main():
         [
             rule("", GuacamoleHandler),
             rule("oauth_callback", HubOAuthCallbackHandler),
-            rule("health/?", HealthHandler),
+            ("/health/?", HealthHandler),
             # TODO: Enforce naming restrictions on user and server names in JupyterHub
             rule(r"(?P<servername>[^/]*)", GuacamoleHandler),
         ],

@@ -38,7 +38,7 @@ async def fetch(client, url, cookiejar, **kwargs):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("namedserver", ["", "name"])
 async def test_guacamole_handler(app, namedserver):
-    hub, mock_guacamole_port = app
+    hub = app["hub"]
     assert hub.config.JupyterHub.services
 
     base = f"{hub.bind_url}"
@@ -102,6 +102,17 @@ async def test_guacamole_handler(app, namedserver):
     assert not r.headers.get("Set-Cookie")
     body = r.body.decode()
 
-    guacamole_url = f"http://localhost:{mock_guacamole_port}/guacamole/#/client/"
+    guacamole_url = f"http://localhost:{app['mock_guacamole_port']}/guacamole/#/client/"
     assert f"{guacamole_url}?token=test/jupyter-test-rdp" in body
     assert f"{guacamole_url}?token=test/jupyter-test-vnc" in body
+
+
+@pytest.mark.asyncio
+async def test_guacamole_health(app):
+    client = AsyncHTTPClient()
+    # Should not include JUPYTERHUB_SERVICE_PREFIX
+    health_url = f"http://localhost:{app['guacamole_handler_port']}/health"
+    r = await client.fetch(health_url)
+    assert r.code == 200
+    d = json.loads(r.body.decode())
+    assert d == {"status": "ok"}

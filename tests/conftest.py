@@ -67,14 +67,18 @@ async def app(configured_mockhub_instance):
         }
     }
 
-    app = (await configured_mockhub_instance)(config=config)
-    await app.initialize()
-    await app.start()
-    yield app, mock_guacamole_port
+    hub = (await configured_mockhub_instance)(config=config)
+    await hub.initialize()
+    await hub.start()
+    yield {
+        "hub": hub,
+        "guacamole_handler_port": guacamole_handler_port,
+        "mock_guacamole_port": mock_guacamole_port,
+    }
     # https://github.com/jupyterhub/pytest-jupyterhub/blob/73ba84066d2646e13a1a8b0ca6bbfbd186d6c44d/pytest_jupyterhub/jupyterhub_spawners.py#L78-L86
     # app.stop()
-    app.http_server.stop()
-    await app.shutdown_cancel_tasks(sig=signal.SIGTERM)
+    hub.http_server.stop()
+    await hub.shutdown_cancel_tasks(sig=signal.SIGTERM)
 
 
 def random_port() -> int:
