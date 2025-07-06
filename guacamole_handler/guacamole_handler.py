@@ -64,7 +64,7 @@ def encrypt(key, message):
     return ct
 
 
-async def guacamole_url(username, protocol):
+async def guacamole_url(username, hostname, protocol):
     expiry_ms = int(time() * 1000) + 60000
     data = {
         "username": username,
@@ -76,7 +76,7 @@ async def guacamole_url(username, protocol):
         data["connections"] = {
             f"jupyter-{username}-vnc": {
                 "protocol": "vnc",
-                "parameters": {"hostname": f"jupyter-{username}", "port": "5901"},
+                "parameters": {"hostname": hostname, "port": "5901"},
             }
         }
     elif protocol == "rdp":
@@ -84,7 +84,7 @@ async def guacamole_url(username, protocol):
             f"jupyter-{username}-rdp": {
                 "protocol": "rdp",
                 "parameters": {
-                    "hostname": f"jupyter-{username}",
+                    "hostname": hostname,
                     "port": "3389",
                     "username": "ubuntu",
                     "password": "IGNORED",
@@ -128,7 +128,7 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
         return os.path.join(os.path.dirname(__file__), "templates")
 
     @authenticated
-    async def get(self, servername):
+    async def get(self, servername=""):
         current_user_model = self.get_current_user()
         log.debug(f"{current_user_model=}")
         if not current_user_model:
@@ -155,17 +155,32 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
             raise HTTPError(409, reason="User's server is not running")
 
         urls = {}
+        # connection and dns_name in server state must be set by Spawner
         connection = server["state"].get("connection")
-        if not connection or connection == "rdp":
-            rdp = await guacamole_url(user["name"], "rdp")
-            urls["rdp"] = (
-                f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={rdp['authToken']}"
+        dns_name = server["state"].get("dns_name")
+
+        invalid_state = False
+        if not dns_name:
+            log.error(f"user server '{servername}' state is missing dns_name: {user}")
+            invalid_state = True
+        if not connection:
+            log.error(f"user server '{servername}' state is missing connection: {user}")
+            invalid_state = True
+        if connection not in {"rdp", "vnc"}:
+            log.error(
+                f"user server '{servername}' state has invalid connection: {user}"
             )
-        if not connection or connection == "vnc":
-            vnc = await guacamole_url(user["name"], "vnc")
-            urls["vnc"] = (
-                f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={vnc['authToken']}"
+            invalid_state = True
+        if invalid_state:
+            raise HTTPError(
+                500, reason="Failed to get connection details for user server"
             )
+
+        url = await guacamole_url(user["name"], dns_name, connection)
+        urls[connection] = (
+            f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={url['authToken']}"
+        )
+
         log.info(f"Created Guacamole URL(s) for {user['name']} default server")
         # self.set_header("content-type", "application/json")
         # self.write(json.dumps(d, indent=2, sort_keys=True))

@@ -103,8 +103,10 @@ async def test_guacamole_handler(app, namedserver):
     body = r.body.decode()
 
     guacamole_url = f"http://localhost:{app['mock_guacamole_port']}/guacamole/#/client/"
-    assert f"{guacamole_url}?token=test/jupyter-test-rdp" in body
-    assert f"{guacamole_url}?token=test/jupyter-test-vnc" in body
+    if namedserver:
+        assert f"{guacamole_url}?token=test/jupyter-test-vnc" in body
+    else:
+        assert f"{guacamole_url}?token=test/jupyter-test-rdp" in body
 
 
 @pytest.mark.asyncio

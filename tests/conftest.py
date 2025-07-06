@@ -3,12 +3,28 @@ import sys
 from pathlib import Path
 import signal
 from pytest_asyncio import fixture as asyncio_fixture
+from jupyterhub.spawner import SimpleLocalProcessSpawner
 
 
 pytest_plugins = ["asyncio", "jupyterhub-spawners-plugin"]
 
 
 HERE = Path(__file__).parent
+
+
+class MockGuacSpawner(SimpleLocalProcessSpawner):
+    # Override simple spawner to include dns_name and connection in state
+    # For testing purposes return connection=rdp for the default server
+    # and vnc for the named server
+
+    def get_state(self):
+        state = super().get_state()
+        if self.name:
+            state["connection"] = "vnc"
+        else:
+            state["connection"] = "rdp"
+        state["dns_name"] = "server-mock.example.org"
+        return state
 
 
 @asyncio_fixture(scope="function")
@@ -64,6 +80,7 @@ async def app(configured_mockhub_instance):
                     },
                 },
             ],
+            "spawner_class": MockGuacSpawner,
         }
     }
 

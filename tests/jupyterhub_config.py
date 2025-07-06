@@ -1,7 +1,8 @@
 # Configuration file for jupyterhub-demo
 import sys
+
 # from jupyterhub.auth import DummyAuthenticator
-# from jupyterhub.spawner import SimpleLocalProcessSpawner
+from jupyterhub.spawner import SimpleLocalProcessSpawner
 
 c = get_config()  # noqa
 # c.Application.log_level = 'DEBUG'
@@ -9,11 +10,21 @@ c = get_config()  # noqa
 # c.Spawner.disable_user_config = True
 
 
+class MockGuacSpawner(SimpleLocalProcessSpawner):
+    # Override simple spawner to include dns_name and connection in state
+
+    def get_state(self):
+        state = super().get_state()
+        state["connection"] = "rdp"
+        state["dns_name"] = "server-mock.example.org"
+        return state
+
+
 # Use memory
 # c.JupyterHub.db_url = "sqlite://"
 
 c.JupyterHub.authenticator_class = "dummy"
-c.JupyterHub.spawner_class = "simple"
+c.JupyterHub.spawner_class = MockGuacSpawner
 c.Authenticator.admin_users = {"admin", "demo"}
 
 c.JupyterHub.allow_named_servers = True
