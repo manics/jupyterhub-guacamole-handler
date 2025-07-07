@@ -165,11 +165,11 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
             raise HTTPError(409, reason="User's server is not running")
 
         urls = {}
-        # connection and dns_name in server state must be set by Spawner
-        connection = server["state"].get("connection")
+        # All these fields in server state must be set by the Spawner
+        connection = server["state"].get("desktop_connection")
         dns_name = server["state"].get("dns_name")
-        username = server["state"].get("username")
-        password = server["state"].get("password")
+        username = server["state"].get("desktop_username")
+        password = server["state"].get("desktop_password")
 
         invalid_state = False
         if not dns_name:

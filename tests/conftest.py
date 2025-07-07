@@ -20,9 +20,9 @@ class MockGuacSpawner(SimpleLocalProcessSpawner):
     def get_state(self):
         state = super().get_state()
         if self.name:
-            state["connection"] = "vnc"
+            state["desktop_connection"] = "vnc"
         else:
-            state["connection"] = "rdp"
+            state["desktop_connection"] = "rdp"
         state["dns_name"] = "server-mock.example.org"
         return state
 
