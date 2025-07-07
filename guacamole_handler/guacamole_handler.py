@@ -83,9 +83,9 @@ async def guacamole_url(
             "parameters": {"hostname": hostname, "port": "5901"},
         }
         if username is not None:
-            connection["username"] = username
+            connection["parameters"]["username"] = username
         if password is not None:
-            connection["password"] = password
+            connection["parameters"]["password"] = password
         data["connections"] = {f"jupyter-{jupyterhub_username}-vnc": connection}
 
     elif protocol == "rdp":
@@ -98,9 +98,9 @@ async def guacamole_url(
             },
         }
         if username is not None:
-            connection["username"] = username
+            connection["parameters"]["username"] = username
         if password is not None:
-            connection["password"] = password
+            connection["parameters"]["password"] = password
         data["connections"] = {f"jupyter-{jupyterhub_username}-rdp": connection}
     else:
         raise ValueError(f"Invalid protocol: {protocol}")
@@ -133,6 +133,25 @@ async def guacamole_url(
     return d
 
 
+def _redact_sensitive(data):
+    """
+    Recursively create a deep copy of a dictionary, redacting values
+    for sensitive keys
+    """
+    if not isinstance(data, dict):
+        return data
+
+    redacted_data = {}
+    for key, value in data.items():
+        if isinstance(value, dict):
+            redacted_data[key] = _redact_sensitive(value)
+        elif "password" in str(key).lower():
+            redacted_data[key] = "********"
+        else:
+            redacted_data[key] = value
+    return redacted_data
+
+
 class GuacamoleHandler(HubOAuthenticated, RequestHandler):
     def get_template_path(self):
         return os.path.join(os.path.dirname(__file__), "templates")
@@ -157,11 +176,12 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
             raise HTTPError(500, reason="Failed to get user info")
 
         user = json.loads(response.body)
-        log.debug(f"{user=}")
+        user_redacted = _redact_sensitive(user)
+        log.debug(f"user={user_redacted}")
 
         server = user["servers"].get(servername)
         if not server:
-            log.error(f"user server '{servername}' isn't running: {user}")
+            log.error(f"user server '{servername}' isn't running: {user_redacted}")
             raise HTTPError(409, reason="User's server is not running")
 
         urls = {}
@@ -173,14 +193,18 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
 
         invalid_state = False
         if not dns_name:
-            log.error(f"user server '{servername}' state is missing dns_name: {user}")
+            log.error(
+                f"user server '{servername}' state is missing dns_name: {user_redacted}"
+            )
             invalid_state = True
         if not connection:
-            log.error(f"user server '{servername}' state is missing connection: {user}")
+            log.error(
+                f"user server '{servername}' state is missing connection: {user_redacted}"
+            )
             invalid_state = True
         if connection not in {"rdp", "vnc"}:
             log.error(
-                f"user server '{servername}' state has invalid connection: {user}"
+                f"user server '{servername}' state has invalid connection: {user_redacted}"
             )
             invalid_state = True
         if invalid_state:

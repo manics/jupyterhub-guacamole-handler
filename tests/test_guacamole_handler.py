@@ -119,3 +119,24 @@ async def test_guacamole_health(app):
     assert r.code == 200
     d = json.loads(r.body.decode())
     assert d == {"status": "ok"}
+
+
+def test_redact_sensitive(monkeypatch):
+    monkeypatch.setenv("GUACAMOLE_HOST", "http://localhost")
+    monkeypatch.setenv("JSON_SECRET_KEY", "token")
+    monkeypatch.setenv("JUPYTERHUB_API_TOKEN", "token")
+    monkeypatch.setenv("JUPYTERHUB_SERVICE_PREFIX", "/prefix")
+
+    from guacamole_handler.guacamole_handler import _redact_sensitive
+
+    d = {
+        "abc": 1,
+        "password": "secret1",
+        "nested1": {"nested2": {"def": "def", "1password1": "secret2"}},
+    }
+    redacted = _redact_sensitive(d)
+    assert redacted == {
+        "abc": 1,
+        "password": "********",
+        "nested1": {"nested2": {"def": "def", "1password1": "********"}},
+    }
