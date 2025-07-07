@@ -1,11 +1,12 @@
 #!/usr/bin/env python
-from base64 import standard_b64decode
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import json
 import os
 import sys
-from tornado import ioloop, web
+from base64 import standard_b64decode
 from urllib.parse import parse_qs
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from tornado import ioloop, web
 
 
 def decrypt(formdata, key):

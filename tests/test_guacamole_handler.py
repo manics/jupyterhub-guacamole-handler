@@ -1,8 +1,9 @@
+import json
+import re
+from urllib.parse import urlparse
+
 import pytest
 from tornado.httpclient import AsyncHTTPClient
-from urllib.parse import urlparse
-import re
-import json
 
 
 def update_cookiejar(jar, headers):

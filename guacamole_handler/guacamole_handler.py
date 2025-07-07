@@ -5,31 +5,25 @@ Fetch a token from Guacamole
 https://github.com/jupyterhub/jupyterhub/blob/5.0.0/examples/service-whoami/whoami-oauth.py
 """
 
-from argparse import ArgumentParser
+import hashlib
+import hmac
 import json
+import logging
 import os
+from argparse import ArgumentParser
+from base64 import standard_b64encode
+from http.client import responses
+from time import time
 from urllib.parse import urlparse
 
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from jupyterhub.services.auth import HubOAuthCallbackHandler, HubOAuthenticated
+from jupyterhub.utils import url_path_join
+from tornado.escape import url_escape
 from tornado.httpclient import AsyncHTTPClient, HTTPRequest
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
-from tornado.web import Application
-from tornado.web import authenticated
-from tornado.web import HTTPError
-from tornado.web import RequestHandler
-
-from jupyterhub.services.auth import HubOAuthCallbackHandler
-from jupyterhub.services.auth import HubOAuthenticated
-from jupyterhub.utils import url_path_join
-
-from base64 import standard_b64encode
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-import hmac
-import hashlib
-import logging
-from time import time
-from tornado.escape import url_escape
-from http.client import responses
+from tornado.web import Application, HTTPError, RequestHandler, authenticated
 
 log = logging.getLogger("jupyterhub_guacamole")
 

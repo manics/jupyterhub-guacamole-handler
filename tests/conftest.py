@@ -1,10 +1,10 @@
+import signal
 import socket
 import sys
 from pathlib import Path
-import signal
-from pytest_asyncio import fixture as asyncio_fixture
-from jupyterhub.spawner import SimpleLocalProcessSpawner
 
+from jupyterhub.spawner import SimpleLocalProcessSpawner
+from pytest_asyncio import fixture as asyncio_fixture
 
 pytest_plugins = ["asyncio", "jupyterhub-spawners-plugin"]
 
