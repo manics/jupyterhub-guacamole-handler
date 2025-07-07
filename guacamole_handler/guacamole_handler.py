@@ -64,34 +64,50 @@ def encrypt(key, message):
     return ct
 
 
-async def guacamole_url(username, hostname, protocol):
+async def guacamole_url(
+    jupyterhub_username, hostname, protocol, username=None, password=None
+):
+    """
+    Create a temporary Guacamole access URL
+
+    jupyterhub_username: JupyterHub username, used to identify the user/connection
+    hostname: Hostname to connect to a users's server
+    protocol: Connection protocol, `rdp` or `vnc`
+    username: Username to connect to the user's server (different from jupyterhub_username)
+    password: Password to connect to the user's server
+    """
     expiry_ms = int(time() * 1000) + 60000
     data = {
-        "username": username,
+        "username": jupyterhub_username,
         "expires": expiry_ms,
         "connections": {},
     }
 
     if protocol == "vnc":
-        data["connections"] = {
-            f"jupyter-{username}-vnc": {
-                "protocol": "vnc",
-                "parameters": {"hostname": hostname, "port": "5901"},
-            }
+        connection = {
+            "protocol": "vnc",
+            "parameters": {"hostname": hostname, "port": "5901"},
         }
+        if username is not None:
+            connection["username"] = username
+        if password is not None:
+            connection["password"] = password
+        data["connections"] = {f"jupyter-{jupyterhub_username}-vnc": connection}
+
     elif protocol == "rdp":
-        data["connections"] = {
-            f"jupyter-{username}-rdp": {
-                "protocol": "rdp",
-                "parameters": {
-                    "hostname": hostname,
-                    "port": "3389",
-                    "username": "ubuntu",
-                    "password": "IGNORED",
-                    "ignore-cert": "true",
-                },
-            }
+        connection = {
+            "protocol": "rdp",
+            "parameters": {
+                "hostname": hostname,
+                "port": "3389",
+                "ignore-cert": "true",
+            },
         }
+        if username is not None:
+            connection["username"] = username
+        if password is not None:
+            connection["password"] = password
+        data["connections"] = {f"jupyter-{jupyterhub_username}-rdp": connection}
     else:
         raise ValueError(f"Invalid protocol: {protocol}")
 
@@ -158,6 +174,8 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
         # connection and dns_name in server state must be set by Spawner
         connection = server["state"].get("connection")
         dns_name = server["state"].get("dns_name")
+        username = server["state"].get("username")
+        password = server["state"].get("password")
 
         invalid_state = False
         if not dns_name:
@@ -176,7 +194,9 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
                 500, reason="Failed to get connection details for user server"
             )
 
-        url = await guacamole_url(user["name"], dns_name, connection)
+        url = await guacamole_url(
+            user["name"], dns_name, connection, username, password
+        )
         urls[connection] = (
             f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={url['authToken']}"
         )
