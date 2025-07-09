@@ -35,6 +35,9 @@ JSON_SECRET_KEY = os.environ["JSON_SECRET_KEY"]
 JUPYTERHUB_API_TOKEN = os.environ["JUPYTERHUB_API_TOKEN"]
 JUPYTERHUB_SERVICE_PREFIX = os.environ["JUPYTERHUB_SERVICE_PREFIX"]
 
+# "copy, paste or both"
+DISABLE_CLIPBOARD = os.getenv("DISABLE_CLIPBOARD", "")
+
 
 def sign(key, message):
     # openssl dgst -sha256 -mac HMAC -macopt hexkey:"$KEY" -binary <data>
@@ -59,7 +62,12 @@ def encrypt(key, message):
 
 
 async def guacamole_url(
-    jupyterhub_username, hostname, protocol, username=None, password=None
+    jupyterhub_username,
+    hostname,
+    protocol,
+    username=None,
+    password=None,
+    extra_params=None,
 ):
     """
     Create a temporary Guacamole access URL
@@ -69,7 +77,10 @@ async def guacamole_url(
     protocol: Connection protocol, `rdp` or `vnc`
     username: Username to connect to the user's server (different from jupyterhub_username)
     password: Password to connect to the user's server
+    extra_params: Dictionary of additional Guacamole parameters
     """
+    extra_params = extra_params or {}
+
     expiry_ms = int(time() * 1000) + 60000
     data = {
         "username": jupyterhub_username,
@@ -80,7 +91,11 @@ async def guacamole_url(
     if protocol == "vnc":
         connection = {
             "protocol": "vnc",
-            "parameters": {"hostname": hostname, "port": "5901"},
+            "parameters": {
+                "hostname": hostname,
+                "port": "5901",
+                **extra_params,
+            },
         }
         if username is not None:
             connection["parameters"]["username"] = username
@@ -95,6 +110,7 @@ async def guacamole_url(
                 "hostname": hostname,
                 "port": "3389",
                 "ignore-cert": "true",
+                **extra_params,
             },
         }
         if username is not None:
@@ -116,7 +132,9 @@ async def guacamole_url(
         "Content-Type": "application/x-www-form-urlencoded",
         "content-length": str(len(body)),
     }
-    log.debug(f"Fetching {GUACAMOLE_HOST}/guacamole/api/tokens {message}")
+    log.debug(
+        f"Fetching {GUACAMOLE_HOST}/guacamole/api/tokens {_redact_sensitive(data)}"
+    )
     request = HTTPRequest(
         f"{GUACAMOLE_HOST}/guacamole/api/tokens",
         "POST",
@@ -212,8 +230,16 @@ class GuacamoleHandler(HubOAuthenticated, RequestHandler):
                 500, reason="Failed to get connection details for user server"
             )
 
+        extra_params = {}
+        if DISABLE_CLIPBOARD not in {"", "copy", "paste", "both"}:
+            raise ValueError(f"Invalid DISABLE_CLIPBOARD: {DISABLE_CLIPBOARD}")
+        if DISABLE_CLIPBOARD in {"copy", "both"}:
+            extra_params["disable-copy"] = "true"
+        if DISABLE_CLIPBOARD in {"paste", "both"}:
+            extra_params["disable-paste"] = "true"
+
         url = await guacamole_url(
-            user["name"], dns_name, connection, username, password
+            user["name"], dns_name, connection, username, password, extra_params
         )
         urls[connection] = (
             f"{GUACAMOLE_PUBLIC_HOST}/guacamole/#/client/?token={url['authToken']}"
