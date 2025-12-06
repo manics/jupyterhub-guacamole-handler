@@ -145,7 +145,7 @@ pygments==2.19.2
     # via
     #   nbconvert
     #   pytest
-pytest==8.4.2
+pytest==9.0.1
     # via
     #   -r requirements-dev.in
     #   pytest-asyncio

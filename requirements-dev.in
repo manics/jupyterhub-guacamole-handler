@@ -1,4 +1,4 @@
 -r requirements.in
-pytest<9
+pytest
 pytest-asyncio
 pytest-jupyterhub
